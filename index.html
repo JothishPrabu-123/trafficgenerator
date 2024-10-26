@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RL Scheduler Dashboard</title>
+    <!-- Include Tailwind CSS via CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Include Chart.js via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center text-blue-400 mb-8">RL Scheduler Dashboard</h1>
+
+        <!-- Traffic Types Chart Section -->
+        <!-- <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-lg font-semibold text-gray-200 mb-4">Traffic Types Per Second</h2>
+            <div class="relative h-64">
+                <canvas id="trafficTypesChart" class="w-full h-full"></canvas>
+            </div>
+        </div> -->
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Throughput Chart -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-200 mb-4">Network Throughput</h2>
+                <div class="relative h-64">
+                    <canvas id="throughputChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Latency Chart -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-200 mb-4">Latency</h2>
+                <div class="relative h-64">
+                    <canvas id="latencyChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Packet Loss Chart -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-200 mb-4">Packet Loss</h2>
+                <div class="relative h-64">
+                    <canvas id="packetLossChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+
+            <!-- Fairness Chart -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-200 mb-4">Fairness Index</h2>
+                <div class="relative h-64">
+                    <canvas id="fairnessChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include your app.js file -->
+    <script src="app.js"></script>
+</body>
+</html>

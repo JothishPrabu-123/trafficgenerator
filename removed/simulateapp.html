@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Management Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <div class="max-w-5xl mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">Traffic Management Tool</h1>
+
+        <!-- Current Configuration Section -->
+        <div class="bg-white p-6 rounded shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Current Configuration</h2>
+            <div id="configDisplay" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Cards for each configured traffic type will be populated here -->
+            </div>
+        </div>
+
+        <!-- Default Traffic Types Section -->
+        <div class="bg-white p-6 rounded shadow-md mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">Default Traffic Types</h2>
+            <div id="defaultTrafficTypes" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Cards for each default traffic type will be populated here -->
+            </div>
+        </div>
+
+        <!-- Add/Remove Form & Other Actions -->
+        <div class="bg-white p-6 rounded shadow-md mb-6">
+            <h3 class="text-lg font-semibold mb-4">Manage Traffic Types</h3>
+            <form id="addTrafficForm" class="flex items-center space-x-2 mb-4">
+                <select id="trafficName" class="border border-gray-300 rounded p-2">
+                    <!-- Default traffic types will be populated here -->
+                </select>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add Traffic Type</button>
+            </form>
+
+            <form id="removeTrafficForm" class="flex items-center space-x-2 mb-4">
+                <input type="text" id="removeTrafficName" placeholder="Traffic Name to Remove" required class="border border-gray-300 rounded p-2 w-full" />
+                <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Remove</button>
+            </form>
+
+            <form id="userCountForm" class="flex items-center space-x-2">
+                <input type="number" id="userCount" placeholder="Number of Users" required class="border border-gray-300 rounded p-2 w-full" />
+                <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Set User Count</button>
+            </form>
+        </div>
+
+        <!-- Save Configuration -->
+        <div class="bg-white p-6 rounded shadow-md mb-6">
+            <button onclick="saveConfig()" class="bg-indigo-500 text-white px-4 py-2 rounded w-full hover:bg-indigo-600">Save Configuration & Start Streaming</button>
+        </div>
+
+        <!-- Real-Time Traffic Data -->
+        <div class="bg-white p-6 rounded shadow-md">
+            <h3 class="text-xl font-semibold mb-4">Real-Time Traffic Data</h3>
+            <div id="trafficData" class="bg-gray-100 p-2 rounded overflow-auto text-sm h-40"></div>
+        </div>
+    </div>
+
+    <script>
+        const apiUrl = 'http://127.0.0.1:5532';
+        let socket;
+
+        // Fetch and display current configuration and default traffic types
+        async function fetchConfig() {
+            const response = await fetch(`${apiUrl}/config`);
+            const data = await response.json();
+
+            // Populate current configuration cards
+            const configDisplay = document.getElementById('configDisplay');
+            configDisplay.innerHTML = '';  // Clear existing content
+            for (const [name, details] of Object.entries(data.config.traffic_types)) {
+                configDisplay.appendChild(createTrafficCard(name, details));
+            }
+
+            // Populate default traffic types cards
+            const defaultTrafficTypes = document.getElementById('defaultTrafficTypes');
+            defaultTrafficTypes.innerHTML = '';  // Clear existing content
+            for (const [name, details] of Object.entries(data.default_traffic_types)) {
+                defaultTrafficTypes.appendChild(createTrafficCard(name, details));
+            }
+
+            // Populate dropdown for adding traffic types
+            const select = document.getElementById('trafficName');
+            select.innerHTML = '';
+            for (const type in data.default_traffic_types) {
+                const option = document.createElement('option');
+                option.value = type;
+                option.text = type;
+                select.add(option);
+            }
+        }
+
+        // Helper function to create a card for each traffic type
+        function createTrafficCard(name, details) {
+            const card = document.createElement('div');
+            card.className = 'bg-blue-50 p-4 rounded shadow-sm';
+
+            const title = document.createElement('h4');
+            title.className = 'font-semibold text-blue-700 text-lg';
+            title.innerText = name;
+            card.appendChild(title);
+
+            const dataRate = document.createElement('p');
+            dataRate.className = 'text-gray-600';
+            dataRate.innerHTML = `<strong>Data Rate:</strong> ${details.data_rate} Mbps`;
+            card.appendChild(dataRate);
+
+            const latency = document.createElement('p');
+            latency.className = 'text-gray-600';
+            latency.innerHTML = `<strong>Latency:</strong> ${details.latency} ms`;
+            card.appendChild(latency);
+
+            const priority = document.createElement('p');
+            priority.className = 'text-gray-600';
+            priority.innerHTML = `<strong>Priority:</strong> ${details.priority}`;
+            card.appendChild(priority);
+
+            const serviceType = document.createElement('p');
+            serviceType.className = 'text-gray-600';
+            serviceType.innerHTML = `<strong>Service Type:</strong> ${details.service_type}`;
+            card.appendChild(serviceType);
+
+            return card;
+        }
+
+        // Add traffic type from default list
+        document.getElementById('addTrafficForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('trafficName').value;
+
+            const response = await fetch(`${apiUrl}/add_traffic_type`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            await response.json();
+            fetchConfig();  // Refresh config display
+        });
+
+        // Remove traffic type
+        document.getElementById('removeTrafficForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('removeTrafficName').value;
+
+            const response = await fetch(`${apiUrl}/remove_traffic_type`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            await response.json();
+            fetchConfig();  // Refresh config display
+        });
+
+        // Set number of users
+        document.getElementById('userCountForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const num_users = parseInt(document.getElementById('userCount').value);
+
+            const response = await fetch(`${apiUrl}/set_user_count`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ num_users })
+            });
+            await response.json();
+            fetchConfig();  // Refresh config display
+        });
+
+        // Save configuration and start WebSocket stream
+        async function saveConfig() {
+            const response = await fetch(`${apiUrl}/save_config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            alert(result.message);
+
+            // Connect to WebSocket and start streaming
+            socket = io.connect(apiUrl);
+            socket.emit('start_stream');
+            socket.on('traffic_data', (data) => {
+                const trafficDisplay = document.getElementById('trafficData');
+                const entry = document.createElement('p');
+                entry.innerText = JSON.stringify(data);
+                trafficDisplay.appendChild(entry);
+            });
+        }
+
+        // Load initial configuration and default traffic types
+        fetchConfig();
+    </script>
+</body>
+</html>

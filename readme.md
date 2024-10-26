@@ -1,5 +1,6 @@
 Certainly! Below are the `requirements.txt` and a `README.md` file to help you set up and run your code.
 
+<img width="1346" alt="Screenshot 2024-10-26 at 10 48 56 AM" src="https://github.com/user-attachments/assets/e7be9675-fd4c-4ca8-a241-8e6bff05a801">
 ---
 
 **`requirements.txt`**

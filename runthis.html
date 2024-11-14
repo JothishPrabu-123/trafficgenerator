@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-time Object Detection with YOLOv10m</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    #videoElement, #canvasElement {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-weight: bold;
+      background-color: rgba(0, 0, 0, 0.5);
+      padding: 5px;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Loading model...</div>
+  <video id="videoElement" width="640" height="480" autoplay playsinline muted></video>
+  <canvas id="canvasElement" width="640" height="480"></canvas>
+
+  <!-- Include ONNX Runtime Web -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+  <!-- Include NMS for post-processing -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  <!-- Include any other necessary scripts -->
+
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      const video = document.getElementById('videoElement');
+      const canvas = document.getElementById('canvasElement');
+      const ctx = canvas.getContext('2d');
+
+      // Load the model
+      status.textContent = 'Loading model...';
+
+      // Provide the correct URL or path to your model file
+      const modelUrl = 'path_to_your_yolov10m.onnx'; // Update this to the actual model path
+
+      // Initialize ONNX Runtime Inference Session with WebAssembly backend
+      const session = await ort.InferenceSession.create(modelUrl, {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all'
+      });
+
+      status.textContent = 'Initializing webcam...';
+
+      // Access the webcam
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            video.play();
+            status.textContent = 'Running detection...';
+            detectionLoop();
+          };
+        })
+        .catch((err) => {
+          console.error('Error accessing webcam: ', err);
+          status.textContent = 'Error accessing webcam';
+        });
+
+      async function detectionLoop() {
+        // Draw the video frame to the canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Get image data from the canvas
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Preprocess the image data
+        const inputTensor = preprocess(imageData);
+
+        // Run inference
+        const feeds = { 'images': inputTensor }; // Adjust the input name based on your model
+        const results = await session.run(feeds);
+
+        // Post-process the results
+        const detections = await postprocess(results);
+
+        // Draw detections
+        drawDetections(detections);
+
+        // Loop
+        requestAnimationFrame(detectionLoop);
+      }
+
+      function preprocess(imageData) {
+        // Resize and normalize the image as per the model's requirement
+        const modelWidth = 640; // Update if your model uses a different size
+        const modelHeight = 640;
+
+        // Create a canvas to resize the image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = modelWidth;
+        tempCanvas.height = modelHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        // Draw the image to the temporary canvas
+        tempCtx.drawImage(video, 0, 0, modelWidth, modelHeight);
+
+        // Get the resized image data
+        const resizedImageData = tempCtx.getImageData(0, 0, modelWidth, modelHeight);
+
+        // Convert to Float32Array and normalize
+        const { data } = resizedImageData;
+        const float32Data = new Float32Array(modelWidth * modelHeight * 3);
+
+        for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
+          float32Data[j] = data[i] / 255.0;       // R
+          float32Data[j + 1] = data[i + 1] / 255.0; // G
+          float32Data[j + 2] = data[i + 2] / 255.0; // B
+        }
+
+        // Create the input tensor in NCHW format
+        const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, modelHeight, modelWidth]);
+
+        return inputTensor;
+      }
+
+      async function postprocess(results) {
+        // Adjust output names based on your model
+        const outputData = results['output0'].data; // Update 'output0' to your model's output name
+        const numClasses = 80; // Number of classes in your model
+
+        // Convert output data to a tensor for processing
+        const outputTensor = tf.tensor(outputData).reshape([1, -1, numClasses + 5]);
+
+        // Extract boxes, scores, and class probabilities
+        const [boxes, scores, classes] = await extractBoxes(outputTensor);
+
+        // Perform Non-Max Suppression
+        const nmsIndices = await tf.image.nonMaxSuppressionAsync(
+          boxes, scores, 20, 0.5, 0.4
+        );
+
+        const detections = [];
+        const indices = await nmsIndices.array();
+
+        for (const i of indices) {
+          const bbox = boxes.arraySync()[i];
+          const classId = classes.arraySync()[i];
+          const score = scores.arraySync()[i];
+
+          // Convert bbox coordinates from [ymin, xmin, ymax, xmax] to [x, y, width, height]
+          const x = bbox[1] * canvas.width;
+          const y = bbox[0] * canvas.height;
+          const width = (bbox[3] - bbox[1]) * canvas.width;
+          const height = (bbox[2] - bbox[0]) * canvas.height;
+
+          detections.push({
+            x,
+            y,
+            width,
+            height,
+            score,
+            label: getLabel(classId),
+          });
+        }
+
+        // Clean up tensors
+        tf.dispose([outputTensor, boxes, scores, classes, nmsIndices]);
+
+        return detections;
+      }
+
+      async function extractBoxes(outputTensor) {
+        // YOLO models output tensors in the shape [batch, num_boxes, 5 + num_classes]
+        // 5 = [center_x, center_y, width, height, objectness_score]
+        // Extract bounding boxes and class probabilities
+
+        const numBoxes = outputTensor.shape[1];
+
+        // Split the tensor into individual components
+        const boxes = tf.slice(outputTensor, [0, 0, 0], [-1, -1, 4]);
+        const objectness = tf.slice(outputTensor, [0, 0, 4], [-1, -1, 1]);
+        const classProbs = tf.slice(outputTensor, [0, 0, 5], [-1, -1, -1]);
+
+        // Apply sigmoid to objectness and class probabilities
+        const scores = tf.sigmoid(tf.squeeze(objectness, [0, 2]));
+        const classes = tf.argMax(tf.sigmoid(classProbs), -1);
+
+        // Convert boxes from center coordinates to corners
+        const [centerX, centerY, width, height] = tf.split(boxes, 4, -1);
+
+        const ymin = centerY.sub(height.div(2)).div(canvas.height);
+        const xmin = centerX.sub(width.div(2)).div(canvas.width);
+        const ymax = centerY.add(height.div(2)).div(canvas.height);
+        const xmax = centerX.add(width.div(2)).div(canvas.width);
+
+        const boxesProcessed = tf.concat([ymin, xmin, ymax, xmax], -1).squeeze();
+
+        return [boxesProcessed, scores, classes];
+      }
+
+      function drawDetections(detections) {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Draw bounding boxes and labels
+        ctx.lineWidth = 2;
+        ctx.font = '16px Arial';
+
+        detections.forEach((det) => {
+          ctx.strokeStyle = '#00FF00';
+          ctx.fillStyle = '#00FF00';
+
+          ctx.strokeRect(det.x, det.y, det.width, det.height);
+          ctx.fillText(
+            `${det.label} (${(det.score * 100).toFixed(1)}%)`,
+            det.x + 5,
+            det.y > 20 ? det.y - 5 : 15
+          );
+        });
+      }
+
+      function getLabel(classId) {
+        // Map class IDs to labels
+        const labels = [
+          'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+          // ... (Add all class labels according to your model)
+        ];
+
+        return labels[classId] || 'unknown';
+      }
+    })();
+  </script>
+</body>
+</html>

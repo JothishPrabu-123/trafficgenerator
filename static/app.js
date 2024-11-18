@@ -49,7 +49,7 @@ class NetworkTrafficApp {
                 </button>
             </div>
             <div class="text-xs text-gray-500">Stream ID: ${streamId.slice(0, 8)}...</div>
-            
+
             <!-- QoS Metrics -->
             <div class="mt-4 space-y-2">
                 <div class="text-sm font-medium">QoS Metrics</div>
@@ -66,13 +66,9 @@ class NetworkTrafficApp {
                         <div class="text-gray-600">Packet Loss</div>
                         <div class="packet-loss-value font-medium">-</div>
                     </div>
-                    <div class="bg-white p-2 rounded">
-                        <div class="text-gray-600">Jitter</div>
-                        <div class="jitter-value font-medium">-</div>
-                    </div>
                 </div>
             </div>
-            
+
             <!-- Charts -->
             <div class="mt-4">
                 <canvas id="chart-${streamId}" class="w-full h-40"></canvas>
@@ -80,6 +76,7 @@ class NetworkTrafficApp {
         `;
         return card;
     }
+
 
     async addNewStream() {
         const userDensity = document.getElementById("user_density").value;
@@ -154,7 +151,6 @@ class NetworkTrafficApp {
         card.querySelector('.latency-value').textContent = `${metrics.avg_latency.toFixed(2)} ms`;
         card.querySelector('.throughput-value').textContent = `${metrics.avg_throughput.toFixed(2)} Mbps`;
         card.querySelector('.packet-loss-value').textContent = `${metrics.avg_packet_loss.toFixed(2)}%`;
-        card.querySelector('.jitter-value').textContent = `${metrics.avg_jitter.toFixed(2)} ms`;
 
         // Store metrics for export
         if (!this.metrics[streamId]) {
@@ -162,9 +158,12 @@ class NetworkTrafficApp {
         }
         this.metrics[streamId].push({
             timestamp: new Date().toISOString(),
-            ...metrics
+            avg_latency: metrics.avg_latency,
+            avg_throughput: metrics.avg_throughput,
+            avg_packet_loss: metrics.avg_packet_loss
         });
     }
+
 
     updateCharts(streamId, metrics) {
         const chart = this.charts.get(streamId);

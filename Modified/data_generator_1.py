@@ -4,12 +4,14 @@ import asyncio
 import aiohttp
 import random
 import threading
-import time
 import uuid
 from qos_manager import QoSManager
 
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode="gevent")
+
+# Initialize QoS Manager
+qos_manager = QoSManager()
 
 # Define traffic types, user densities, and traffic loads
 TRAFFIC_TYPES = {
@@ -20,9 +22,6 @@ TRAFFIC_TYPES = {
     "Text Message": {"data_rate": 0.01, "latency": 100.0},
     "Voice Message": {"data_rate": 5.0, "latency": 25.0},
 }
-
-# Initialize QoS Manager
-qos_manager = QoSManager()
 
 USER_DENSITIES = ["low", "medium", "high"]
 
@@ -54,17 +53,23 @@ def generate_mock_data(user_density, traffic_type, stream_id):
     }
 
 async def send_packets(user_density, traffic_type, stream_id):
+    retries = 0
+    max_retries = 3
+    retry_delay = 1  # seconds
+
     async with aiohttp.ClientSession() as session:
         while stream_id in active_tasks:
             raw_data = generate_mock_data(user_density, traffic_type, stream_id)
-            
-            # Apply QoS management
             processed_data = qos_manager.process_packet(stream_id, raw_data)
             
             try:
-                async with session.post("http://127.0.0.1:5432/process_packet/", json=processed_data) as response:
+                async with session.post(
+                    "http://127.0.0.1:5432/process_packet/",
+                    json=processed_data,
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
                     if response.status == 200:
-                        # Get QoS metrics
+                        retries = 0  # Reset retry counter on successful request
                         metrics = qos_manager.get_metrics(stream_id)
                         
                         socketio.emit("packet_status", {
@@ -75,17 +80,47 @@ async def send_packets(user_density, traffic_type, stream_id):
                             "qos_mode": qos_manager.qos_mode
                         })
                     else:
+                        error_text = await response.text()
                         socketio.emit("packet_status", {
                             "status": "error",
-                            "data": await response.text(),
+                            "data": error_text,
                             "stream_id": stream_id
                         })
+
+            except asyncio.TimeoutError:
+                socketio.emit("packet_status", {
+                    "status": "timeout",
+                    "data": "Request timed out",
+                    "stream_id": stream_id
+                })
+                
+            except aiohttp.ClientError as e:
+                retries += 1
+                if retries > max_retries:
+                    socketio.emit("packet_status", {
+                        "status": "error",
+                        "data": f"Connection failed after {max_retries} retries. Packet processing server might be down.",
+                        "stream_id": stream_id
+                    })
+                    # Optional: add a longer delay or stop the stream
+                    await asyncio.sleep(5)
+                    retries = 0
+                else:
+                    socketio.emit("packet_status", {
+                        "status": "retry",
+                        "data": f"Connection attempt {retries}/{max_retries}",
+                        "stream_id": stream_id
+                    })
+                    await asyncio.sleep(retry_delay)
+                continue
+                
             except Exception as e:
                 socketio.emit("packet_status", {
                     "status": "exception",
                     "data": str(e),
                     "stream_id": stream_id
                 })
+            
             await asyncio.sleep(1)
 
 @app.route("/add_traffic_stream", methods=["POST"])
@@ -147,6 +182,27 @@ def get_active_streams():
 def stop_all_streams():
     active_tasks.clear()
     return jsonify({"status": "all_streams_stopped"})
+
+@app.route("/qos_comparison/<stream_id>", methods=["GET"])
+def get_qos_comparison(stream_id):
+    analysis = qos_manager.get_comparative_analysis(stream_id)
+    return jsonify(analysis)
+
+@app.route("/qos_comparison", methods=["GET"])
+def get_overall_qos_comparison():
+    analysis = qos_manager.get_comparative_analysis()
+    return jsonify(analysis)
+
+@app.route("/qos_report/<stream_id>", methods=["GET"])
+def get_qos_report(stream_id):
+    report = qos_manager.get_comparison_report(stream_id)
+    return jsonify({"report": report})
+
+@app.route("/generate_plots/<stream_id>", methods=["POST"])
+def generate_qos_plots(stream_id):
+    save_path = request.json.get("save_path", "./static/plots")
+    qos_manager.generate_comparison_plots(stream_id, save_path)
+    return jsonify({"status": "success", "path": f"{save_path}/stream_{stream_id}_comparison.png"})
 
 @app.route("/")
 def index():

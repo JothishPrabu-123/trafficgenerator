@@ -262,6 +262,44 @@ async function fetchData() {
     }
 }
 
+async function fetchComparativeData() {
+    try {
+        const response = await fetch('http://127.0.0.1:5432/get_comparative_data');
+        const data = await response.json();
+        updateComparisonCharts(data);
+    } catch (error) {
+        console.error('Error fetching comparative data:', error);
+    }
+}
+
+function updateComparisonCharts(data) {
+    const comparisonCtx = document.getElementById('comparisonChart').getContext('2d');
+    new Chart(comparisonCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Throughput', 'Latency', 'Packet Loss', 'Fairness'],
+            datasets: Object.keys(data).map((scheduler, index) => ({
+                label: scheduler,
+                data: [
+                    data[scheduler].throughput[1] - data[scheduler].throughput[0],
+                    data[scheduler].latency[1] - data[scheduler].latency[0],
+                    data[scheduler].packet_loss[1] - data[scheduler].packet_loss[0],
+                    data[scheduler].fairness[1] - data[scheduler].fairness[0],
+                ],
+                backgroundColor: `rgba(${50 + index * 50}, 99, 132, 0.2)`,
+                borderColor: `rgba(${50 + index * 50}, 99, 132, 1)`,
+                borderWidth: 1,
+            })),
+        },
+        options: {
+            scales: {
+                y: { beginAtZero: true }
+            },
+        },
+    });
+}
+
+
 // Function to fetch traffic type counts
 async function fetchTrafficTypeCounts() {
     try {

@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic Packet Sender</title>
+    <title>Multi-Stream Network Traffic Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="min-h-screen bg-gray-50 p-8">
-    <div class="max-w-4xl mx-auto space-y-6">
+    <div class="max-w-6xl mx-auto space-y-6">
         <div class="bg-white rounded-lg shadow-md">
             <!-- Header -->
             <div class="border-b p-6">
@@ -16,14 +17,22 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                     </svg>
-                    Network Traffic Generator
+                    Multi-Stream Network Traffic Generator
                 </h1>
+
+                <button id="switch_qos" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Switch QoS Mode
+                </button>
+                <span id="qos_mode_indicator" class="ml-2 text-sm text-gray-600">QoS Mode: RL</span>
+                <button id="export_metrics" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                    Export Metrics
+                </button>
             </div>
 
             <!-- Main Content -->
             <div class="p-6 space-y-6">
                 <!-- Traffic Configuration -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="space-y-2">
                         <label for="traffic_type" class="block text-sm font-medium text-gray-700">
                             Traffic Type
@@ -44,63 +53,30 @@
                             {% endfor %}
                         </select>
                     </div>
+                    <div class="flex items-end">
+                        <button id="add_stream" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Traffic Stream
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Control Buttons -->
-                <div class="flex gap-4">
-                    <button id="start" class="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                        Start Sending Packets
-                    </button>
-                    <button id="stop" class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        </svg>
-                        Stop Sending Packets
-                    </button>
-                </div>
-
-                <!-- Add New Traffic Type -->
+                <!-- Active Streams -->
                 <div class="border-t pt-6">
-                    <h2 class="text-lg font-medium mb-4">Manage Traffic Types</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <input 
-                            type="text" 
-                            id="new_traffic_type" 
-                            placeholder="New Traffic Type"
-                            class="p-2 border rounded-md"
-                        >
-                        <input 
-                            type="number" 
-                            id="data_rate" 
-                            placeholder="Data Rate (e.g., 10)"
-                            class="p-2 border rounded-md"
-                        >
-                        <input 
-                            type="number" 
-                            id="latency" 
-                            placeholder="Latency (e.g., 20)"
-                            class="p-2 border rounded-md"
-                        >
-                        <div class="flex gap-2">
-                            <button id="add_traffic_type" class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                Add
-                            </button>
-                            <button id="remove_traffic_type" class="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M3 6h18"></path>
-                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                                </svg>
-                                Remove
-                            </button>
-                        </div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-medium">Active Traffic Streams</h2>
+                        <button id="stop_all" class="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            </svg>
+                            Stop All Streams
+                        </button>
+                    </div>
+                    <div id="active_streams" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- Active streams will be dynamically added here -->
                     </div>
                 </div>
 
@@ -113,114 +89,7 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            const socket = io();
-
-            socket.on("packet_status", (data) => {
-                const statusDiv = document.getElementById("status");
-                const newStatus = document.createElement("p");
-                newStatus.textContent = `Packet ${data.status}: ${JSON.stringify(data.data)}`;
-                statusDiv.appendChild(newStatus);
-                statusDiv.scrollTop = statusDiv.scrollHeight;
-            });
-
-            document.getElementById("start").addEventListener("click", async () => {
-                const userDensity = document.getElementById("user_density").value;
-                const trafficType = document.getElementById("traffic_type").value;
-
-                try {
-                    await fetch("/start", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ user_density: userDensity, traffic_type: trafficType })
-                    });
-                    addStatus(`Started sending ${trafficType} packets with ${userDensity} density`);
-                } catch (error) {
-                    addStatus(`Error: ${error.message}`);
-                }
-            });
-
-            document.getElementById("stop").addEventListener("click", async () => {
-                try {
-                    await fetch("/stop", { method: "POST" });
-                    addStatus("Task stopped.");
-                } catch (error) {
-                    addStatus(`Error: ${error.message}`);
-                }
-            });
-
-            document.getElementById("add_traffic_type").addEventListener("click", async () => {
-                const newType = document.getElementById("new_traffic_type").value;
-                const dataRate = parseFloat(document.getElementById("data_rate").value);
-                const latency = parseFloat(document.getElementById("latency").value);
-
-                if (!newType || isNaN(dataRate) || isNaN(latency)) {
-                    addStatus("Please fill in all fields correctly");
-                    return;
-                }
-
-                try {
-                    const response = await fetch("/add_traffic_type", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: newType, data_rate: dataRate, latency: latency })
-                    });
-
-                    const result = await response.json();
-                    if (result.status === "added") {
-                        const trafficTypeSelect = document.getElementById("traffic_type");
-                        const option = document.createElement("option");
-                        option.value = newType;
-                        option.textContent = newType;
-                        trafficTypeSelect.appendChild(option);
-                        
-                        // Clear inputs
-                        document.getElementById("new_traffic_type").value = "";
-                        document.getElementById("data_rate").value = "";
-                        document.getElementById("latency").value = "";
-                        
-                        addStatus(`Added new traffic type: ${newType}`);
-                    } else {
-                        addStatus(`Error: ${result.error}`);
-                    }
-                } catch (error) {
-                    addStatus(`Error: ${error.message}`);
-                }
-            });
-
-            document.getElementById("remove_traffic_type").addEventListener("click", async () => {
-                const typeToRemove = document.getElementById("traffic_type").value;
-
-                try {
-                    const response = await fetch("/remove_traffic_type", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ type: typeToRemove })
-                    });
-
-                    const result = await response.json();
-                    if (result.status === "removed") {
-                        const trafficTypeSelect = document.getElementById("traffic_type");
-                        const optionToRemove = trafficTypeSelect.querySelector(`option[value="${typeToRemove}"]`);
-                        if (optionToRemove) optionToRemove.remove();
-                        addStatus(`Removed traffic type: ${typeToRemove}`);
-                    } else {
-                        addStatus(`Error: ${result.error}`);
-                    }
-                } catch (error) {
-                    addStatus(`Error: ${error.message}`);
-                }
-            });
-
-            function addStatus(message) {
-                const statusDiv = document.getElementById("status");
-                const newStatus = document.createElement("p");
-                newStatus.textContent = message;
-                statusDiv.appendChild(newStatus);
-                statusDiv.scrollTop = statusDiv.scrollHeight;
-            }
-        });
-    </script>
+    <!-- Load the external JavaScript file -->
+    <script src="/static/app.js"></script>
 </body>
 </html>

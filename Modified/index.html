@@ -47,15 +47,22 @@
 
             <!-- Fairness Chart -->
             <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                <h2 class="text-lg font-semibold text-gray-200 mb-4">Fairness Index</h2>
+                <h2 class="text-lg font-semibold text-gray-200 mb-4">Scheduler Reaction to Traffic Increases</h2>
                 <div class="relative h-64">
-                    <canvas id="fairnessChart" class="w-full h-full"></canvas>
+                    <canvas id="comparisonChart" class="w-full h-full"></canvas>
                 </div>
-            </div>
+            </div>            
         </div>
     </div>
 
     <!-- Include your app.js file -->
-    <script src="app.js"></script>
+    <script src="app.js">
+
+    </script>
+    <script>
+        window.addEventListener('load', () => {
+    fetchComparativeData();
+});
+    </script>
 </body>
 </html>

@@ -202,27 +202,70 @@ class NetworkTrafficApp {
     }
 
     exportMetrics() {
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            qosMode: this.qosMode,
-            streams: {}
-        };
+        const exportContainer = document.createElement('div');
+        exportContainer.id = 'export-container';
+        exportContainer.className = 'hidden';
 
-        for (const [streamId, metrics] of Object.entries(this.metrics)) {
-            exportData.streams[streamId] = {
-                streamData: this.activeStreams.get(streamId),
-                metrics: metrics
-            };
-        }
+        // Add the table header
+        const tableHTML = `
+            <div class="p-6 bg-white shadow-lg rounded-lg">
+                <h1 class="text-xl font-bold text-center mb-4">QoS Metrics Report</h1>
+                <table class="table-auto w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-gray-100 text-left">
+                            <th class="px-4 py-2 border border-gray-300">Stream ID</th>
+                            <th class="px-4 py-2 border border-gray-300">Traffic Type</th>
+                            <th class="px-4 py-2 border border-gray-300">User Density</th>
+                            <th class="px-4 py-2 border border-gray-300">Latency (ms)</th>
+                            <th class="px-4 py-2 border border-gray-300">Throughput (Mbps)</th>
+                            <th class="px-4 py-2 border border-gray-300">Packet Loss (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Object.entries(this.metrics)
+                            .map(([streamId, streamMetrics]) => {
+                                const latestMetrics = streamMetrics[streamMetrics.length - 1] || {};
+                                const streamData = this.activeStreams.get(streamId);
+                                return `
+                                    <tr>
+                                        <td class="px-4 py-2 border border-gray-300">${streamId.slice(0, 8)}...</td>
+                                        <td class="px-4 py-2 border border-gray-300">${streamData.trafficType}</td>
+                                        <td class="px-4 py-2 border border-gray-300">${streamData.userDensity}</td>
+                                        <td class="px-4 py-2 border border-gray-300">${latestMetrics.avg_latency?.toFixed(2) || '-'}</td>
+                                        <td class="px-4 py-2 border border-gray-300">${latestMetrics.avg_throughput?.toFixed(2) || '-'}</td>
+                                        <td class="px-4 py-2 border border-gray-300">${latestMetrics.avg_packet_loss?.toFixed(2) || '-'}</td>
+                                    </tr>
+                                `;
+                            })
+                            .join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        exportContainer.innerHTML = tableHTML;
+        document.body.appendChild(exportContainer);
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `qos-metrics-${new Date().toISOString()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Generate PDF using jsPDF and html2canvas
+        const jsPDF = window.jspdf.jsPDF;
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'px',
+            format: 'a4'
+        });
+
+        html2canvas(exportContainer, { scale: 2 }).then((canvas) => {
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 842; // A4 width in px (landscape)
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+            pdf.save(`qos-metrics-${new Date().toISOString()}.pdf`);
+
+            // Remove the hidden container
+            document.body.removeChild(exportContainer);
+        });
     }
+
 
     async stopAllStreams() {
         try {
